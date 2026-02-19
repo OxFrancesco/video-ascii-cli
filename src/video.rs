@@ -174,22 +174,8 @@ pub fn encode_video(
 pub fn create_comparison_video(
     original: &Path,
     ascii_video: &Path,
-    fps: f64,
-    transparent: bool,
 ) -> Result<()> {
     // Determine output path (original + ASCII, stacked)
-    let output = original.with_file_name(
-        original
-            .file_stem()
-            .unwrap()
-            .to_string_lossy()
-            .to_string() + "_compare." + ascii_video.extension().unwrap().to_string_lossy().as_ref()
-    );
-
-    if let Some(parent) = output.parent() {
-        fs::create_dir_all(parent)?;
-    }
-
     let output = original.with_file_name(
         original
             .file_stem()
@@ -219,7 +205,7 @@ pub fn create_comparison_video(
             "-crf",
             "18",
             "-pix_fmt",
-            if transparent { "yuva420p" } else { "yuv420p" },
+            "yuv420p",
             "-tune",
             "stillimage",
         ])

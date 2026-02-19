@@ -82,7 +82,7 @@ pub fn run(config: &PipelineConfig) -> Result<PipelineStats> {
 
     // Create comparison video if requested
     if config.compare {
-        video::create_comparison_video(&config.input, &config.output, fps, config.transparent)?;
+        video::create_comparison_video(&config.input, &config.output)?;
     }
 
     Ok(PipelineStats {
