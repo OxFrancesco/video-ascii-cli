@@ -100,6 +100,7 @@ pub fn encode_video(
     source_video: &Path,
     fps: f64,
     output: &Path,
+    transparent: bool,
 ) -> Result<()> {
     if let Some(parent) = output.parent() {
         fs::create_dir_all(parent)?;
@@ -108,18 +109,109 @@ pub fn encode_video(
     let frame_pattern = ascii_frames_dir.join("frame_%08d.png");
     let fps_string = format!("{fps:.6}");
 
+    let output_cmd = if transparent {
+        // WebP with transparency
+        Command::new("ffmpeg")
+            .args(["-y", "-v", "error", "-framerate"])
+            .arg(&fps_string)
+            .arg("-i")
+            .arg(&frame_pattern)
+            .args([
+                "-c:v",
+                "libwebp",
+                "-pix_fmt",
+                "yuva420p", // Include alpha channel
+                "-quality",
+                "95",
+                "-loop",
+                "0", // Loop infinitely
+            ])
+            .arg(output)
+            .output()
+            .map_err(|source| AppError::CommandSpawn {
+                program: "ffmpeg".to_string(),
+                source,
+            })?
+    } else {
+        // MP4 with H.264 (original behavior)
+        Command::new("ffmpeg")
+            .args(["-y", "-v", "error", "-framerate"])
+            .arg(&fps_string)
+            .arg("-i")
+            .arg(&frame_pattern)
+            .arg("-i")
+            .arg(source_video)
+            .args([
+                "-map",
+                "0:v:0",
+                "-map",
+                "1:a?",
+                "-c:v",
+                "libx264",
+                "-preset",
+                "veryfast",
+                "-crf",
+                "18",
+                "-pix_fmt",
+                "yuv420p",
+                "-tune",
+                "stillimage",
+                "-c:a",
+                "copy",
+                "-shortest",
+            ])
+            .arg(output)
+            .output()
+            .map_err(|source| AppError::CommandSpawn {
+                program: "ffmpeg".to_string(),
+                source,
+            })?
+    };
+
+    ensure_command_success("ffmpeg", &output_cmd)
+}
+
+pub fn create_comparison_video(
+    original: &Path,
+    ascii_video: &Path,
+    fps: f64,
+    transparent: bool,
+) -> Result<()> {
+    // Determine output path (original + ASCII, stacked)
+    let output = original.with_file_name(
+        original
+            .file_stem()
+            .unwrap()
+            .to_string_lossy()
+            .to_string() + "_compare." + ascii_video.extension().unwrap().to_string_lossy().as_ref()
+    );
+
+    if let Some(parent) = output.parent() {
+        fs::create_dir_all(parent)?;
+    }
+
+    let output = original.with_file_name(
+        original
+            .file_stem()
+            .unwrap()
+            .to_string_lossy()
+            .to_string() + "_compare." + ascii_video.extension().unwrap().to_string_lossy().as_ref()
+    );
+
+    if let Some(parent) = output.parent() {
+        fs::create_dir_all(parent)?;
+    }
+
+    // Use ffmpeg's vstack filter to stack videos vertically
     let output_cmd = Command::new("ffmpeg")
-        .args(["-y", "-v", "error", "-framerate"])
-        .arg(&fps_string)
+        .args(["-y", "-v", "error"])
         .arg("-i")
-        .arg(&frame_pattern)
+        .arg(original)
         .arg("-i")
-        .arg(source_video)
+        .arg(ascii_video)
         .args([
-            "-map",
-            "0:v:0",
-            "-map",
-            "1:a?",
+            "-filter_complex",
+            "[0:v][1:v]vstack",
             "-c:v",
             "libx264",
             "-preset",
@@ -127,21 +219,23 @@ pub fn encode_video(
             "-crf",
             "18",
             "-pix_fmt",
-            "yuv420p",
+            if transparent { "yuva420p" } else { "yuv420p" },
             "-tune",
             "stillimage",
-            "-c:a",
-            "copy",
-            "-shortest",
         ])
-        .arg(output)
+        .arg(&output)
         .output()
         .map_err(|source| AppError::CommandSpawn {
             program: "ffmpeg".to_string(),
             source,
         })?;
 
-    ensure_command_success("ffmpeg", &output_cmd)
+    ensure_command_success("ffmpeg", &output_cmd)?;
+
+    // Replace the ASCII video with the comparison video
+    fs::rename(&output, ascii_video)?;
+
+    Ok(())
 }
 
 pub fn create_test_video(

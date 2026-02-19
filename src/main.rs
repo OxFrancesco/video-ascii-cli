@@ -10,6 +10,11 @@ fn main() {
         columns: cli.columns,
         fps: cli.fps,
         charset: cli.charset.clone(),
+        shades: cli.shades,
+        transparent: cli.transparent,
+        bg_color: cli.bg_color,
+        threshold: cli.threshold,
+        compare: cli.compare,
     };
 
     if let Err(err) = run(&config) {

@@ -40,11 +40,13 @@ fn ascii_conversion_outputs_black_and_white_pixels() {
         }
     }
 
-    let options = AsciiOptions::new(8, "@ ");
+    let options = AsciiOptions::new(8, "@ ", 1);
     let converted = convert_frame_to_ascii(&source, &options);
 
-    assert_eq!(converted.width(), 8 * 8);
-    assert_eq!(converted.height(), 6 * 8);
+    // Source 32x24 → 4 columns x 3 rows (32/8, 24/8)
+    // Output: 4*8 x 3*8 = 32 x 24
+    assert_eq!(converted.width(), 4 * 8);
+    assert_eq!(converted.height(), 3 * 8);
     assert!(converted.pixels().all(|p| p[0] == 0 || p[0] == 255));
 }
 
@@ -66,6 +68,11 @@ fn output_generation_creates_ascii_video_file() {
         columns: 20,
         fps: Some(6.0),
         charset: "@%#*+=-:. ".to_string(),
+        shades: 1,
+        transparent: false,
+        bg_color: None,
+        threshold: 0,
+        compare: false,
     };
 
     let stats = run(&config).expect("run pipeline");
@@ -75,6 +82,8 @@ fn output_generation_creates_ascii_video_file() {
     assert!((stats.output_fps - 6.0).abs() < 0.01);
 
     let output_meta = video::probe_video(&output).expect("probe output video");
-    assert_eq!(output_meta.width, 20 * 8);
-    assert_eq!(output_meta.height, 15 * 8);
+    // Input 80x60 → 10 columns x 7 rows (80/8, 60/8 rounded down)
+    // Output: 10*8 x 7*8 = 80 x 56
+    assert_eq!(output_meta.width, 80);
+    assert_eq!(output_meta.height, 56);
 }
